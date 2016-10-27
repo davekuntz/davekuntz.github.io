@@ -1,0 +1,63 @@
+---
+title: "Training and Prediction of FitBit Dataset"
+author: "Dave Kuntz"
+date: "October 26, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The training data was loaded into R, and blank values were converted into NA.  For variable selection, all variables that contained in excess of 95% NA values were eliminated under the assumption that they don't have a signficant impact in describing excercise type, since most of their values were null.  Additionally, the first six columns were removed, as they contain only metadata.  Thus, the number of predictors was reduced from 159 to 53.
+
+```{r}
+suppressPackageStartupMessages(library(caret))
+training <- read.csv('pml-training.csv', header = TRUE, na.strings=c("","NA")) #Import training data, Convert blank columns to NA
+training <- training[,-c(1:6)] #Delete first six columns of metadata
+training <- training[colSums(is.na(training)) < 0.95 * nrow(training)] #Remove all columns that are 95% or more NA
+
+#Test set
+testing<- read.csv('pml-testing.csv', header = TRUE)
+```
+
+RandomForest was used to model the data and make predictions on the test set.  RandomForest was chosen because it is a common classification/regression technique that often gives good results.
+
+```{r}
+set.seed(666)
+tc1 <- trainControl(method="repeatedcv", number=5, repeats=3, 
+                   returnData=TRUE, savePredictions=TRUE, classProbs=TRUE)
+modelrf1 <- train(classe~., method="rf", data=training, trControl=tc1)
+predrftr <- predict(modelrf1, newdata = training)
+
+#Return model accuracy
+confusionMatrix(training$classe,predrftr)
+```
+
+
+The model had an in-sample accuracy rate of essentially 1, or 0.9998 within a 95% confidence interval.  To ensure that the model wasn't being overfit, cross-validation was also performed.
+
+The model calculation was performed using k-fold cross-validation with k=5 and k=10, respectively.  As smaller k values lead to less bias and more variance and larger k values lead to more bias with less variance, we wanted to ensure that both situations were represented to get an accurate out-of-sample error estimate.
+
+```{r}
+#k=5 cross-validation results
+modelrf1
+
+#k=10 cross-validation results
+set.seed(666)
+tc2 <- trainControl(method="repeatedcv", number=10, repeats=3, 
+                   returnData=TRUE, savePredictions=TRUE, classProbs=TRUE)
+
+modelrf2 <- train(classe~., method="rf", data=training, trControl=tc2)
+modelrf2
+```
+
+With k=5 and three repeats, cross-validation yielded an out-of-sample prediction accuracy of 0.9980 or an out-of-sample prediction error of 0.002, or 0.2%.  This is lower than the in-sample prediction accuracy, as we would expect, but is still very accurate.  When k=10, the out-of-sample prediction accuracy was 0.9984, slightly lower.  The true out-of-sample prediction error is somewhere around 0.1%.
+
+The RandomForest model was used to make predictions of classes of excercises in the test set, and predicted it correctly.  Future work could include further variable reduction to speed the RandomForest model training.
+
+```{r}
+#Predictions on test set
+predrf <- predict(modelrf1, newdata = testing)
+predrf
+```
